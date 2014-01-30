@@ -45,7 +45,9 @@
             <f:textbox />
         </f:entry>
 
-    </f:advanced>
+    <f:descriptorList title="${%Node Properties}" descriptors="${h.getNodePropertyDescriptors(descriptor.clazz)}" field="nodeProperties" />
+
+  </f:advanced>
 
   <f:entry title="">
     <div align="right">

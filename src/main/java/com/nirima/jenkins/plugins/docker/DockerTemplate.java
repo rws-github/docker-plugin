@@ -10,19 +10,31 @@ import com.kpelykh.docker.client.DockerClient;
 import com.kpelykh.docker.client.DockerException;
 import com.kpelykh.docker.client.model.*;
 import com.trilead.ssh2.Connection;
+
 import hudson.Extension;
+import hudson.FilePath;
+import hudson.Launcher;
 import hudson.Util;
 import hudson.model.*;
+import hudson.model.Computer;
+import hudson.model.Node.Mode;
 import hudson.model.labels.LabelAtom;
 import hudson.plugins.sshslaves.SSHLauncher;
+import hudson.remoting.Callable;
 import hudson.remoting.Channel;
 import hudson.security.ACL;
 import hudson.slaves.ComputerLauncher;
 import hudson.slaves.NodeProperty;
+import hudson.slaves.NodePropertyDescriptor;
+import hudson.slaves.NodeDescriptor;
 import hudson.slaves.RetentionStrategy;
+import hudson.util.ClockDifference;
+import hudson.util.DescribableList;
 import hudson.util.ListBoxModel;
 import hudson.util.StreamTaskListener;
 import jenkins.model.Jenkins;
+
+import org.apache.commons.lang.StringUtils;
 import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
@@ -33,7 +45,9 @@ import java.net.URL;
 import java.util.*;
 import java.util.logging.Logger;
 
-
+/**
+ * This is not a Node. It only extends Node for Node-scoped tools.
+ */
 public class DockerTemplate implements Describable<DockerTemplate> {
     private static final Logger LOGGER = Logger.getLogger(DockerTemplate.class.getName());
 
@@ -76,6 +90,10 @@ public class DockerTemplate implements Describable<DockerTemplate> {
 
     public final boolean tagOnCompletion;
 
+    public final String sshPort;
+    
+    private /*almost final*/ DescribableList<NodeProperty<?>,NodePropertyDescriptor> nodeProperties = new DescribableList<NodeProperty<?>,NodePropertyDescriptor>(Jenkins.getInstance());
+
     private transient /*almost final*/ Set<LabelAtom> labelSet;
     public transient DockerCloud parent;
 
@@ -84,8 +102,10 @@ public class DockerTemplate implements Describable<DockerTemplate> {
                           String remoteFs,
                           String credentialsId, String jvmOptions, String javaPath,
                           String prefixStartSlaveCmd, String suffixStartSlaveCmd,
-                          boolean tagOnCompletion, String instanceCapStr
-    ) {
+                          boolean tagOnCompletion, String instanceCapStr, String sshPort,
+                          List<? extends NodeProperty<?>> nodeProperties
+    )
+    throws IOException {
         this.image = image;
         this.labelString = Util.fixNull(labelString);
         this.credentialsId = credentialsId;
@@ -102,6 +122,14 @@ public class DockerTemplate implements Describable<DockerTemplate> {
             this.instanceCap = Integer.parseInt(instanceCapStr);
         }
 
+
+        if (!StringUtils.isBlank(sshPort)) {
+            Integer.parseInt(sshPort); // validate the input
+        }
+        this.sshPort = sshPort;
+        
+        this.nodeProperties.replaceBy(nodeProperties);
+        
         readResolve();
     }
 
@@ -148,19 +176,20 @@ public class DockerTemplate implements Describable<DockerTemplate> {
 
 
         int numExecutors = 1;
-        Node.Mode mode = Node.Mode.EXCLUSIVE;
+        // In EXCLUSIVE Mode, the slave never picks up the job
+//        Node.Mode mode = Node.Mode.EXCLUSIVE;
+//        LOGGER.info("Provisioning DockerSlave exclusive to " + this.labelString);
+        Node.Mode mode = Node.Mode.NORMAL;
 
 
         RetentionStrategy retentionStrategy = new DockerRetentionStrategy();//RetentionStrategy.INSTANCE;
 
-        List<? extends NodeProperty<?>> nodeProperties = new ArrayList();
+//        List<? extends NodeProperty<?>> nodeProperties = new ArrayList();
 
         ContainerConfig containerConfig = new ContainerConfig();
         containerConfig.setImage(image);
         containerConfig.setCmd(new String[]{"/usr/sbin/sshd", "-D"});
         containerConfig.setPortSpecs(new String[]{"22"});
-
-
 
         ContainerCreateResponse container = dockerClient.createContainer(containerConfig);
 
@@ -171,7 +200,10 @@ public class DockerTemplate implements Describable<DockerTemplate> {
         Map<String, PortBinding[]> bports = new HashMap<String, PortBinding[]>();
         PortBinding binding = new PortBinding();
         binding.hostIp = "0.0.0.0";
-        // binding.hostPort = "";
+        // in case you are running Docker in something like Vagrant and have port 22 mapped to something else...
+        if (!StringUtils.isBlank(sshPort)) {
+        	binding.hostPort = sshPort;
+        }
         bports.put("22/tcp", new PortBinding[] { binding });
 
         HostConfig hostConfig = new HostConfig();
@@ -199,6 +231,15 @@ public class DockerTemplate implements Describable<DockerTemplate> {
         return 1;
     }
 
+    public String getSshPort() {
+    	return sshPort;
+    }
+
+    public DescribableList<NodeProperty<?>, NodePropertyDescriptor> getNodeProperties() {
+        assert nodeProperties != null;
+    	return nodeProperties;
+    }
+
     @Extension
     public static final class DescriptorImpl extends Descriptor<DockerTemplate> {
 
@@ -208,10 +249,72 @@ public class DockerTemplate implements Describable<DockerTemplate> {
         }
 
         public ListBoxModel doFillCredentialsIdItems(@AncestorInPath ItemGroup context) {
-
             return new SSHUserListBoxModel().withMatching(SSHAuthenticator.matcher(Connection.class),
                     CredentialsProvider.lookupCredentials(StandardUsernameCredentials.class, context,
                             ACL.SYSTEM, SSHLauncher.SSH_SCHEME));
         }
     }
+
+//    // Methods of Node that we do not need. We extend Node so that we can configure tools on the template and
+//    // set them on the actual nodes.
+//    
+//	@Override
+//	public String getNodeName() {
+//		// TODO Auto-generated method stub
+//		return null;
+//	}
+//
+//	@Override
+//	public void setNodeName(String name) {
+//		// TODO Auto-generated method stub
+//		
+//	}
+//
+//	@Override
+//	public String getNodeDescription() {
+//		// TODO Auto-generated method stub
+//		return null;
+//	}
+//
+//	@Override
+//	public Launcher createLauncher(TaskListener listener) {
+//		// TODO Auto-generated method stub
+//		return null;
+//	}
+//
+//	@Override
+//	public Mode getMode() {
+//		// TODO Auto-generated method stub
+//		return null;
+//	}
+//
+//	@Override
+//	protected Computer createComputer() {
+//		// TODO Auto-generated method stub
+//		return null;
+//	}
+//
+//	@Override
+//	public String getLabelString() {
+//		// TODO Auto-generated method stub
+//		return null;
+//	}
+//
+//	@Override
+//	public FilePath getWorkspaceFor(TopLevelItem item) {
+//		// TODO Auto-generated method stub
+//		return null;
+//	}
+//
+//	@Override
+//	public FilePath getRootPath() {
+//		// TODO Auto-generated method stub
+//		return null;
+//	}
+//
+//	@Override
+//	public Callable<ClockDifference, IOException> getClockDifferenceCallable() {
+//		// TODO Auto-generated method stub
+//		return null;
+//	}
 }
