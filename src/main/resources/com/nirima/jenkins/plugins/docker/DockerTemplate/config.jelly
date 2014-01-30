@@ -29,6 +29,10 @@
 
     <f:advanced>
 
+        <f:entry title="${%SSH Port}" field="sshPort">
+            <f:textbox />
+        </f:entry>
+
         <f:entry title="${%JavaPath}" field="javaPath">
             <f:textbox />
         </f:entry>
