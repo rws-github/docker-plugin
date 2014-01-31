@@ -104,7 +104,7 @@ public class DockerSlave extends AbstractCloudSlave {
      * Called when the slave is connected to Jenkins
      */
     public void onConnected() {
-
+    	LOGGER.info("Docker provisioned slave " + containerId + " connected");
     }
 
     public void retentionTerminate() throws IOException, InterruptedException {

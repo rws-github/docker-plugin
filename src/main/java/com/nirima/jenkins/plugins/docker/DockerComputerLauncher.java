@@ -32,7 +32,7 @@ import java.util.logging.Logger;
 
 
 /**
- * {@link hudson.slaves.ComputerLauncher} for EC2 that waits for the instance to really come up before proceeding to
+ * {@link hudson.slaves.ComputerLauncher} for Docker that waits for the instance to really come up before proceeding to
  * the real user-specified {@link hudson.slaves.ComputerLauncher}.
  *
  * @author Kohsuke Kawaguchi

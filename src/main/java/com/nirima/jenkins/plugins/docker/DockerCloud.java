@@ -6,6 +6,7 @@ import com.google.common.collect.Collections2;
 import com.kpelykh.docker.client.DockerClient;
 import com.kpelykh.docker.client.DockerException;
 import com.kpelykh.docker.client.model.Container;
+
 import hudson.Extension;
 import hudson.model.*;
 import hudson.slaves.Cloud;
@@ -13,14 +14,17 @@ import hudson.slaves.NodeProvisioner;
 import hudson.util.FormValidation;
 import hudson.util.StreamTaskListener;
 import jenkins.model.Jenkins;
+
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerResponse;
 
 import javax.annotation.Nullable;
 import javax.servlet.ServletException;
+
 import java.io.IOException;
 import java.net.URL;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -52,8 +56,6 @@ public class DockerCloud extends Cloud {
             this.templates = templates;
         else
             this.templates = Collections.emptyList();
-
-
 
         readResolve();
     }
@@ -98,7 +100,7 @@ public class DockerCloud extends Cloud {
                 }
             }
             */
-            LOGGER.log(Level.INFO, "Excess workload after pending Spot instances: " + excessWorkload);
+        	LOGGER.log(Level.INFO, "Excess workload: " + excessWorkload);
 
             List<NodeProvisioner.PlannedNode> r = new ArrayList<NodeProvisioner.PlannedNode>();
 
@@ -115,7 +117,7 @@ public class DockerCloud extends Cloud {
                             public Node call() throws Exception {
                                 // TODO: record the output somewhere
                                 try {
-                                    DockerSlave s = t.provision(new StreamTaskListener(System.out));
+                                    DockerSlave s = t.provision(new StreamTaskListener(System.out, Charset.defaultCharset()));
                                     Jenkins.getInstance().addNode(s);
                                     // EC2 instances may have a long init script. If we declare
                                     // the provisioning complete by returning without the connect
@@ -146,7 +148,7 @@ public class DockerCloud extends Cloud {
             }
             return r;
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING,"Failed to count the # of live instances on EC2",e);
+            LOGGER.log(Level.WARNING,"Failed to provision Docker slave", e);
             return Collections.emptyList();
         }
     }
@@ -181,8 +183,8 @@ public class DockerCloud extends Cloud {
      * Check not too many already running.
      *
      */
-    private boolean addProvisionedSlave(String image, int amiCap) throws Exception {
-        if( amiCap == 0 )
+    private boolean addProvisionedSlave(String image, int instanceCap) throws Exception {
+        if( instanceCap == 0 )
             return true;
 
         List<Container> containers = connect().listContainers(false);
@@ -194,7 +196,7 @@ public class DockerCloud extends Cloud {
             }
         });
 
-        return matching.size() < amiCap;
+        return matching.size() < instanceCap;
     }
 
     @Extension
