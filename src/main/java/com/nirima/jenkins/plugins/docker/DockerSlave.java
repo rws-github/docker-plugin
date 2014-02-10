@@ -8,7 +8,9 @@ import com.nirima.jenkins.plugins.docker.action.DockerBuildAction;
 
 import hudson.Extension;
 import hudson.model.*;
+import hudson.model.Node.Mode;
 import hudson.model.Slave.SlaveDescriptor;
+import hudson.model.queue.CauseOfBlockage;
 import hudson.slaves.AbstractCloudSlave;
 import hudson.slaves.ComputerLauncher;
 import hudson.slaves.NodeProperty;
@@ -22,6 +24,9 @@ import java.util.logging.Logger;
 
 import javax.servlet.ServletException;
 
+import jenkins.model.Jenkins;
+
+import org.acegisecurity.Authentication;
 import org.kohsuke.stapler.QueryParameter;
 
 
@@ -39,6 +44,34 @@ public class DockerSlave extends AbstractCloudSlave {
         super(name, nodeDescription, remoteFS, numExecutors, mode, labelString, launcher, retentionStrategy, nodeProperties);
         this.dockerTemplate = dockerTemplate;
         this.containerId = containerId;
+    }
+
+    /**
+     * Overriding because of a bug in Jenkins that prevents Slaves from being EXCLUSIVE while the Master has a number of
+     * executors = 0.
+     */
+    @Override
+    public CauseOfBlockage canTake(Queue.BuildableItem item) {
+        Label l = item.getAssignedLabel();
+        if(l!=null && !l.contains(this))
+            return CauseOfBlockage.fromMessage(Messages._Node_LabelMissing(getNodeName(),l));   // the task needs to be executed on label that this node doesn't have.
+
+        Authentication identity = item.authenticate();
+        if (!getACL().hasPermission(identity,Computer.BUILD)) {
+            // doesn't have a permission
+            // TODO: does it make more sense to define a separate permission?
+            return CauseOfBlockage.fromMessage(Messages._Node_LackingBuildPermission(identity.getName(),getNodeName()));
+        }
+
+        // Check each NodeProperty to see whether they object to this node
+        // taking the task
+        for (NodeProperty prop: getNodeProperties()) {
+            CauseOfBlockage c = prop.canTake(item);
+            if (c!=null)    return c;
+        }
+
+        // Looks like we can take the task
+        return null;
     }
 
     public DockerCloud getCloud() {

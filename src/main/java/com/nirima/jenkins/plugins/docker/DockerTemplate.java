@@ -168,23 +168,14 @@ public class DockerTemplate implements Describable<DockerTemplate> {
     public DockerSlave provision(StreamTaskListener listener) throws IOException, Descriptor.FormException, DockerException {
             PrintStream logger = listener.getLogger();
             DockerClient dockerClient = getParent().connect();
-
-
         logger.println("Launching " + image );
 
         String nodeDescription = "Docker Node";
-
-
+        
         int numExecutors = 1;
-        // In EXCLUSIVE Mode, the slave never picks up the job
-//        Node.Mode mode = Node.Mode.EXCLUSIVE;
-//        LOGGER.info("Provisioning DockerSlave exclusive to " + this.labelString);
-        Node.Mode mode = Node.Mode.NORMAL;
-
+        Node.Mode mode = Node.Mode.EXCLUSIVE;
 
         RetentionStrategy retentionStrategy = new DockerRetentionStrategy();//RetentionStrategy.INSTANCE;
-
-//        List<? extends NodeProperty<?>> nodeProperties = new ArrayList();
 
         ContainerConfig containerConfig = new ContainerConfig();
         containerConfig.setImage(image);
@@ -192,7 +183,6 @@ public class DockerTemplate implements Describable<DockerTemplate> {
         containerConfig.setPortSpecs(new String[]{"22"});
 
         ContainerCreateResponse container = dockerClient.createContainer(containerConfig);
-
 
         // Launch it.. :
         // MAybe should be in computerLauncher
