@@ -53,9 +53,23 @@ public class DockerComputerLauncher extends ComputerLauncher {
     @Override
     public void launch(SlaveComputer _computer, TaskListener listener) throws IOException, InterruptedException {
         SSHLauncher launcher = getSSHLauncher();
-        launcher.launch(_computer, listener);
-        if( launcher.getConnection() == null ) {
-            LOGGER.log(Level.WARNING, "Couldn't launch Docker template. Closing.");
+        int attemptsRemaining = 3;
+        while (launcher.getConnection() == null && attemptsRemaining > 0) {
+        	launcher.launch(_computer, listener);
+        	if (launcher.getConnection() == null) {
+        		attemptsRemaining--;
+        		String message = "Failed to ssh to Docker container to install agent.";
+        		if (attemptsRemaining > 0) {
+        			message += " Retrying ssh agent installation " + attemptsRemaining + " more times.";
+        		}
+                LOGGER.log(Level.WARNING, message);
+                synchronized (launcher) {
+                	Thread.sleep(1000L); // sleep for a second
+                }
+        	}
+        }
+        if (launcher.getConnection() == null ) {
+            LOGGER.log(Level.WARNING, "Could not ssh install agent to Docker container. Closing container.");
             DockerComputer dc = (DockerComputer)_computer;
             dc.getNode().terminate();
         }
@@ -71,7 +85,6 @@ public class DockerComputerLauncher extends ComputerLauncher {
          * path='/usr/sbin/sshd', args=[-D],
          * config=ContainerConfig{hostName=970d68eb7410, portSpecs=null, user=, tty=false, stdinOpen=false, stdInOnce=false, memoryLimit=0, memorySwap=0, cpuShares=0, attachStdin=false, attachStdout=false, attachStderr=false, env=null, cmd=[Ljava.lang.String;@658782a7, dns=null, image=jenkins-3, volumes=null, volumesFrom=, entrypoint=null, networkDisabled=false, privileged=false, workingDir=, domainName=, exposedPorts={22/tcp={}}}, state=ContainerState{running=true, pid=8032, exitCode=0, startedAt='2014-01-09T12:19:37.400471534Z', ghost=false, finishedAt='0001-01-01T00:00:00Z'}, image='0ca6c5d5135db3ffb8abfef6a0861a0d2e44b6f37a33b4012a3f2d5cc99f68e9',
          * networkSettings=NetworkSettings{ipAddress='172.17.0.58', ipPrefixLen=16, gateway='172.17.42.1', bridge='docker0', ports={22/tcp=[Lcom.kpelykh.docker.client.model.PortBinding;@2392d604}}, sysInitPath='null', resolvConfPath='/etc/resolv.conf', volumes={}, volumesRW={}, hostnamePath='/var/lib/docker/containers/970d68eb7410bca37ccc8ac193ae68a324f7d286012c1994dcf58a28daa76da2/hostname', hostsPath='/var/lib/docker/containers/970d68eb7410bca37ccc8ac193ae68a324f7d286012c1994dcf58a28daa76da2/hosts', name='/prickly_turing', driver='aufs'}
-
          */
         int port = Integer.parseInt(detail.getNetworkSettings().ports.get("22/tcp")[0].hostPort);
 
