@@ -8,7 +8,7 @@
 
     <groupId>com.nirima</groupId>
     <artifactId>docker-plugin</artifactId>
-    <version>0.2-SNAPSHOT</version>
+    <version>0.2-rs-SNAPSHOT</version>
     <packaging>hpi</packaging>
     <name>Docker plugin</name>
 
@@ -25,12 +25,12 @@
         <dependency>
             <groupId>com.kpelykh</groupId>
             <artifactId>docker-java</artifactId>
-            <version>0.6.1-nm-SNAPSHOT</version>
+            <version>0.6.1-rs-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.jenkins-ci.main</groupId>
             <artifactId>jenkins-core</artifactId>
-            <version>1.546</version>
+            <version>1.553</version>
         </dependency>
         <dependency>
             <groupId>org.kohsuke.stapler</groupId>
