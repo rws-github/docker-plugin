@@ -1,33 +1,36 @@
 package com.nirima.jenkins.plugins.docker;
 
+import hudson.Extension;
+import hudson.model.Messages;
+import hudson.model.TaskListener;
+import hudson.model.Computer;
+import hudson.model.Descriptor;
+import hudson.model.Label;
+import hudson.model.Node.Mode;
+import hudson.model.Queue;
+import hudson.model.Run;
+import hudson.model.queue.CauseOfBlockage;
+import hudson.slaves.AbstractCloudSlave;
+import hudson.slaves.NodeProperty;
+import hudson.slaves.ComputerLauncher;
+import hudson.slaves.RetentionStrategy;
+import hudson.triggers.SafeTimerTask;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import jenkins.util.Timer;
+
+import org.acegisecurity.Authentication;
+
 import com.google.common.base.Objects;
 import com.kpelykh.docker.client.DockerClient;
 import com.kpelykh.docker.client.DockerException;
 import com.kpelykh.docker.client.model.CommitConfig;
 import com.nirima.jenkins.plugins.docker.action.DockerBuildAction;
-
-import hudson.Extension;
-import hudson.model.*;
-import hudson.model.Node.Mode;
-import hudson.model.Slave.SlaveDescriptor;
-import hudson.model.queue.CauseOfBlockage;
-import hudson.slaves.AbstractCloudSlave;
-import hudson.slaves.ComputerLauncher;
-import hudson.slaves.NodeProperty;
-import hudson.slaves.RetentionStrategy;
-import hudson.util.ListBoxModel;
-
-import java.io.IOException;
-import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import javax.servlet.ServletException;
-
-import jenkins.model.Jenkins;
-
-import org.acegisecurity.Authentication;
-import org.kohsuke.stapler.QueryParameter;
 
 
 public class DockerSlave extends AbstractCloudSlave {
@@ -140,8 +143,17 @@ public class DockerSlave extends AbstractCloudSlave {
     	LOGGER.info("Docker provisioned slave " + containerId + " connected");
     }
 
-    public void retentionTerminate() throws IOException, InterruptedException {
-        terminate();
+    public void retentionTerminate() {
+        Timer.get().submit(new SafeTimerTask() {
+            public void doRun() {
+            	try {
+            		terminate();
+            	}
+            	catch (Exception e) {
+                	LOGGER.log(Level.WARNING, "Error terminating Docker provisioned slave", e);
+            	}
+            }
+        });
     }
 
     @Override

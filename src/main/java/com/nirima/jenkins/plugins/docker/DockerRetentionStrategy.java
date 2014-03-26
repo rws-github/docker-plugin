@@ -2,12 +2,11 @@ package com.nirima.jenkins.plugins.docker;
 
 import hudson.model.Descriptor;
 import hudson.slaves.RetentionStrategy;
-import hudson.util.TimeUnit2;
-import org.kohsuke.stapler.DataBoundConstructor;
 
-import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import org.kohsuke.stapler.DataBoundConstructor;
 
 
 public class DockerRetentionStrategy  extends RetentionStrategy<DockerComputer> {
@@ -28,13 +27,7 @@ public class DockerRetentionStrategy  extends RetentionStrategy<DockerComputer> 
             if (idleMilliseconds > 0) {
                 LOGGER.info("Idle timeout: "+c.getName());
                 LOGGER.log(Level.INFO, "Terminating " + c);
-                try {
-                    c.getNode().retentionTerminate();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+                c.getNode().retentionTerminate();
             }
         }
         return 1;
