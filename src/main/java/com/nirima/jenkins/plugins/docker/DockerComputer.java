@@ -33,7 +33,7 @@ public class DockerComputer extends AbstractCloudComputer<DockerSlave> {
     @Override
     public void taskAccepted(Executor executor, Queue.Task task) {
         super.taskAccepted(executor, task);
-        LOGGER.warning(" Computer " + this + " taskAccepted");
+        LOGGER.log(Level.FINE, " Computer " + this + " taskAccepted");
     }
 
     @Override
@@ -52,20 +52,20 @@ public class DockerComputer extends AbstractCloudComputer<DockerSlave> {
 
 
         }
-        LOGGER.log(Level.INFO, " Computer " + this + " taskCompleted");
+        LOGGER.log(Level.FINE, " Computer " + this + " taskCompleted");
 
     }
 
     @Override
     public void taskCompletedWithProblems(Executor executor, Queue.Task task, long durationMS, Throwable problems) {
         super.taskCompletedWithProblems(executor, task, durationMS, problems);
-        LOGGER.log(Level.INFO, " Computer " + this + " taskCompletedWithProblems");
+        LOGGER.log(Level.FINE, " Computer " + this + " taskCompletedWithProblems");
     }
 
     @Override
     public boolean isAcceptingTasks() {
         boolean result = !haveWeRunAnyJobs && super.isAcceptingTasks();
-        LOGGER.log(Level.INFO, " Computer " + this + " isAcceptingTasks " + result);
+        LOGGER.log(Level.FINE, " Computer " + this + " isAcceptingTasks " + result);
         return result;
     }
 
