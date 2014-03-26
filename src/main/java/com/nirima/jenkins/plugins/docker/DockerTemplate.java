@@ -152,7 +152,7 @@ public class DockerTemplate implements Describable<DockerTemplate> {
     /**
      * Initializes data structure that we don't persist.
      */
-    protected Object readResolve() {
+    public Object readResolve() {
         labelSet = Label.parse(labelString);
         return this;
     }
