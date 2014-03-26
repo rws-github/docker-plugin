@@ -53,8 +53,11 @@ public class DockerComputerLauncher extends ComputerLauncher {
     @Override
     public void launch(SlaveComputer _computer, TaskListener listener) throws IOException, InterruptedException {
         SSHLauncher launcher = getSSHLauncher();
-        int attemptsRemaining = 3;
+        int attemptsRemaining = 4;
         while (launcher.getConnection() == null && attemptsRemaining > 0) {
+			synchronized (launcher) {
+				Thread.sleep(1000L * (5 - attemptsRemaining)); // sleep for a few seconds - 1, 2, 3, 4
+			}
         	launcher.launch(_computer, listener);
         	if (launcher.getConnection() == null) {
         		attemptsRemaining--;
@@ -63,9 +66,6 @@ public class DockerComputerLauncher extends ComputerLauncher {
         			message += " Retrying ssh agent installation " + attemptsRemaining + " more times.";
         		}
                 LOGGER.log(Level.WARNING, message);
-                synchronized (launcher) {
-                	Thread.sleep(1000L); // sleep for a second
-                }
         	}
         }
         if (launcher.getConnection() == null ) {
