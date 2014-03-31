@@ -210,7 +210,7 @@ public class DockerTemplate implements Describable<DockerTemplate> {
         ComputerLauncher launcher = new DockerComputerLauncher(this, containerInspectResponse);
 
         return new DockerSlave(this, containerId,
-                containerId.substring(12),
+                containerId.substring(0, 12),
                 nodeDescription,
                 remoteFs, numExecutors, mode, labelString,
                 launcher, retentionStrategy, nodeProperties);
