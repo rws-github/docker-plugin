@@ -20,7 +20,7 @@ public class DockerRetentionStrategy  extends RetentionStrategy<DockerComputer> 
 
     @Override
     public synchronized long check(DockerComputer c) {
-        LOGGER.log(Level.INFO, "Checking " + c);
+        LOGGER.log(Level.FINE, "Checking " + c);
         if (c.isIdle() && c.isOnline() && !disabled && c.haveWeRunAnyJobs()) {
             // TODO: really think about the right strategy here
             final long idleMilliseconds = System.currentTimeMillis() - c.getIdleStartMilliseconds();
@@ -41,6 +41,11 @@ public class DockerRetentionStrategy  extends RetentionStrategy<DockerComputer> 
         c.connect(false);
     }
 
+    @Override
+    public boolean isManualLaunchAllowed(DockerComputer c) {
+    	return false;
+    }
+    
     // no registration since this retention strategy is used only for EC2 nodes that we provision automatically.
     // @Extension
     public static class DescriptorImpl extends Descriptor<RetentionStrategy<?>> {

@@ -115,6 +115,9 @@ public class DockerSlave extends AbstractCloudSlave {
         } catch (DockerException e) {
             LOGGER.log(Level.SEVERE, "Failure to terminate instance " + containerId);
         }
+        finally {
+        	dockerTemplate.containerTerminated(this, listener);
+        }
     }
 
     public void commit() throws DockerException, IOException {
@@ -140,17 +143,19 @@ public class DockerSlave extends AbstractCloudSlave {
      * Called when the slave is connected to Jenkins
      */
     public void onConnected() {
-    	LOGGER.info("Docker provisioned slave " + containerId + " connected");
+    	LOGGER.info("Docker provisioned slave " + getDisplayName() + " connected");
     }
 
     public void retentionTerminate() {
         Timer.get().submit(new SafeTimerTask() {
             public void doRun() {
             	try {
+                	LOGGER.log(Level.INFO, "Terminating Docker provisioned slave " + getDisplayName());
             		terminate();
+                	LOGGER.log(Level.INFO, "Terminated Docker provisioned slave " + getDisplayName());
             	}
             	catch (Exception e) {
-                	LOGGER.log(Level.WARNING, "Error terminating Docker provisioned slave", e);
+                	LOGGER.log(Level.WARNING, "Error terminating Docker provisioned slave " + getDisplayName(), e);
             	}
             }
         });

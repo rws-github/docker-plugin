@@ -95,6 +95,12 @@ public class DockerComputerLauncher extends ComputerLauncher {
 
         return new SSHLauncher(host, port, template.credentialsId, template.jvmOptions , template.javaPath, template.prefixStartSlaveCmd, template.suffixStartSlaveCmd);
     }
+    
+    @Override
+    public void beforeDisconnect(SlaveComputer computer, TaskListener listener) {
+    	LOGGER.log(Level.INFO, "Disconnecting " + computer);
+    	super.beforeDisconnect(computer, listener);
+    }
 
     @Extension
     public static class DescriptorImpl extends Descriptor<ComputerLauncher> {

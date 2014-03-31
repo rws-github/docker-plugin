@@ -27,6 +27,10 @@
           <f:textbox />
         </f:entry>
 
+        <f:entry title="${%Min Idle Containers}" field="minIdleContainersStr">
+          <f:textbox />
+        </f:entry>
+
     <f:advanced>
 
         <f:entry title="${%SSH Port}" field="sshPort">

@@ -2,9 +2,11 @@ package com.nirima.jenkins.plugins.docker;
 
 import com.google.common.base.Objects;
 import com.nirima.jenkins.plugins.docker.action.DockerBuildAction;
+
 import hudson.model.*;
 import hudson.slaves.AbstractCloudComputer;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -15,7 +17,7 @@ public class DockerComputer extends AbstractCloudComputer<DockerSlave> {
     private static final Logger LOGGER = Logger.getLogger(DockerComputer.class.getName());
 
 
-    private boolean haveWeRunAnyJobs = false;
+    private AtomicBoolean haveWeRunAnyJobs = new AtomicBoolean(false);
 
 
     public DockerComputer(DockerSlave dockerSlave) {
@@ -27,7 +29,7 @@ public class DockerComputer extends AbstractCloudComputer<DockerSlave> {
     }
 
     public boolean haveWeRunAnyJobs() {
-        return haveWeRunAnyJobs;
+        return haveWeRunAnyJobs.get();
     }
 
     @Override
@@ -38,33 +40,40 @@ public class DockerComputer extends AbstractCloudComputer<DockerSlave> {
 
     @Override
     public void taskCompleted(Executor executor, Queue.Task task, long durationMS) {
-        super.taskCompleted(executor, task, durationMS);
+    	try {
+    		LOGGER.log(Level.FINE, " Computer " + this + " taskCompleted");
+	        super.taskCompleted(executor, task, durationMS);
 
-        haveWeRunAnyJobs = true;
-
-        Queue.Executable executable = executor.getCurrentExecutable();
-        if( executable instanceof Run) {
-            Run build = (Run) executable;
-
-            if( getNode().dockerTemplate.tagOnCompletion ) {
-                getNode().commitOnTerminate( build );
-            }
-
-
-        }
-        LOGGER.log(Level.FINE, " Computer " + this + " taskCompleted");
-
+	        Queue.Executable executable = executor.getCurrentExecutable();
+	        if( executable instanceof Run) {
+	            Run build = (Run) executable;
+	
+	            if( getNode().dockerTemplate.tagOnCompletion ) {
+	                getNode().commitOnTerminate( build );
+	            }
+	        }
+    	}
+    	finally {
+    		haveWeRunAnyJobs.set(true);
+    		getNode().retentionTerminate(); // terminate immediately, retention takes too long
+    	}
     }
 
     @Override
     public void taskCompletedWithProblems(Executor executor, Queue.Task task, long durationMS, Throwable problems) {
-        super.taskCompletedWithProblems(executor, task, durationMS, problems);
-        LOGGER.log(Level.FINE, " Computer " + this + " taskCompletedWithProblems");
+    	try {
+    		LOGGER.log(Level.FINE, " Computer " + this + " taskCompletedWithProblems");
+	        super.taskCompletedWithProblems(executor, task, durationMS, problems);
+    	}
+    	finally {
+    		haveWeRunAnyJobs.set(true);
+    		getNode().retentionTerminate(); // terminate immediately, retention takes too long
+    	}
     }
 
     @Override
     public boolean isAcceptingTasks() {
-        boolean result = !haveWeRunAnyJobs && super.isAcceptingTasks();
+        boolean result = !haveWeRunAnyJobs() && super.isAcceptingTasks();
         LOGGER.log(Level.FINE, " Computer " + this + " isAcceptingTasks " + result);
         return result;
     }

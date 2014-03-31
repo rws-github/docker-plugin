@@ -85,7 +85,8 @@ public class DockerTemplate implements Describable<DockerTemplate> {
     public final String remoteFs; // = "/home/jenkins";
 
 
-    public final int instanceCap;
+    public final int instanceCap; // maximum number of containers allowed to be created at one time
+    public final int minIdleContainers; // minimum number of containers to have waiting for jobs
 
 
     public final boolean tagOnCompletion;
@@ -103,8 +104,7 @@ public class DockerTemplate implements Describable<DockerTemplate> {
                           String credentialsId, String jvmOptions, String javaPath,
                           String prefixStartSlaveCmd, String suffixStartSlaveCmd,
                           boolean tagOnCompletion, String instanceCapStr, String sshPort,
-                          List<? extends NodeProperty<?>> nodeProperties
-    )
+                          List<? extends NodeProperty<?>> nodeProperties, String minIdleContainersStr)
     throws IOException {
         this.image = image;
         this.labelString = Util.fixNull(labelString);
@@ -116,14 +116,23 @@ public class DockerTemplate implements Describable<DockerTemplate> {
         this.remoteFs =  Strings.isNullOrEmpty(remoteFs)?"/home/jenkins":remoteFs;
         this.tagOnCompletion = tagOnCompletion;
 
-        if(instanceCapStr.equals("")) {
+        if (Strings.isNullOrEmpty(instanceCapStr)) {
             this.instanceCap = Integer.MAX_VALUE;
         } else {
             this.instanceCap = Integer.parseInt(instanceCapStr);
         }
 
+        if (Strings.isNullOrEmpty(minIdleContainersStr)) {
+            this.minIdleContainers = 0;
+        } else {
+            this.minIdleContainers = Integer.parseInt(minIdleContainersStr);
+        }
 
-        if (!StringUtils.isBlank(sshPort)) {
+        if (this.minIdleContainers > this.instanceCap) {
+        	throw new RuntimeException("Minimum number of idle containers must be less than or equals to the container cap.");
+        }
+
+        if (!Strings.isNullOrEmpty(sshPort)) {
             Integer.parseInt(sshPort); // validate the input
         }
         this.sshPort = sshPort;
@@ -139,6 +148,18 @@ public class DockerTemplate implements Describable<DockerTemplate> {
         } else {
             return String.valueOf(instanceCap);
         }
+    }
+
+    public int getInstanceCap() {
+        return instanceCap;
+    }
+
+    public String getMinIdleContainersStr() {
+        return String.valueOf(minIdleContainers);
+    }
+
+    public int getMinIdleContainers() {
+        return minIdleContainers;
     }
 
     public Descriptor<DockerTemplate> getDescriptor() {
@@ -244,4 +265,8 @@ public class DockerTemplate implements Describable<DockerTemplate> {
                             ACL.SYSTEM, SSHLauncher.SSH_SCHEME));
         }
     }
+
+	void containerTerminated(DockerSlave dockerSlave, TaskListener listener) {
+		parent.containerTerminated(this, dockerSlave, listener);
+	}
 }

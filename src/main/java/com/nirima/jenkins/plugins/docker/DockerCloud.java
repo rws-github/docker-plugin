@@ -9,20 +9,22 @@ import com.kpelykh.docker.client.model.Container;
 
 import hudson.Extension;
 import hudson.model.*;
+import hudson.model.MultiStageTimeSeries.TimeScale;
 import hudson.slaves.Cloud;
 import hudson.slaves.NodeProvisioner;
+import hudson.slaves.NodeProvisioner.PlannedNode;
 import hudson.util.FormValidation;
 import hudson.util.StreamTaskListener;
 import jenkins.model.Jenkins;
 
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
-import org.kohsuke.stapler.StaplerResponse;
 
 import javax.annotation.Nullable;
 import javax.servlet.ServletException;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -79,78 +81,74 @@ public class DockerCloud extends Cloud {
     }
 
     @Override
-    public Collection<NodeProvisioner.PlannedNode> provision(Label label, int excessWorkload) {
+    public Collection<NodeProvisioner.PlannedNode> provision(final Label label, final int excessWorkload) {
         try {
-            // Count number of pending executors from spot requests
-        /*    for(EC2SpotSlave n : NodeIterator.nodes(EC2SpotSlave.class)){
-                // If the slave is online then it is already counted by Jenkins
-                // We only want to count potential additional Spot instance slaves
-                if (n.getComputer().isOffline()){
-                    DescribeSpotInstanceRequestsRequest dsir =
-                            new DescribeSpotInstanceRequestsRequest().withSpotInstanceRequestIds(n.getSpotInstanceRequestId());
-
-                    for(SpotInstanceRequest sir : connect().describeSpotInstanceRequests(dsir).getSpotInstanceRequests()) {
-                        // Count Spot requests that are open and still have a chance to be active
-                        // A request can be active and not yet registered as a slave. We check above
-                        // to ensure only unregistered slaves get counted
-                        if(sir.getState().equals("open") || sir.getState().equals("active")){
-                            excessWorkload -= n.getNumExecutors();
-                        }
-                    }
-                }
-            }
-            */
         	LOGGER.log(Level.INFO, "Excess workload: " + excessWorkload);
 
             List<NodeProvisioner.PlannedNode> r = new ArrayList<NodeProvisioner.PlannedNode>();
 
             final DockerTemplate t = getTemplate(label);
+            int containersToCreate = Math.min(excessWorkload + t.minIdleContainers, t.instanceCap);
+        	LOGGER.log(Level.INFO, "Creating " + containersToCreate + " containers...");
 
-            while (excessWorkload>0) {
-
-                if (!addProvisionedSlave(t.image, t.instanceCap)) {
-                    break;
-                }
-
-                r.add(new NodeProvisioner.PlannedNode(t.getDisplayName(),
-                        Computer.threadPoolForRemoting.submit(new Callable<Node>() {
-                            public Node call() throws Exception {
-                                // TODO: record the output somewhere
-                                try {
-                                    DockerSlave s = t.provision(new StreamTaskListener(System.out, Charset.defaultCharset()));
-                                    Jenkins.getInstance().addNode(s);
-                                    // EC2 instances may have a long init script. If we declare
-                                    // the provisioning complete by returning without the connect
-                                    // operation, NodeProvisioner may decide that it still wants
-                                    // one more instance, because it sees that (1) all the slaves
-                                    // are offline (because it's still being launched) and
-                                    // (2) there's no capacity provisioned yet.
-                                    //
-                                    // deferring the completion of provisioning until the launch
-                                    // goes successful prevents this problem.
-                                    s.toComputer().connect(false).get();
-                                    return s;
-                                }
-                                catch(Exception ex) {
-                                    LOGGER.log(Level.WARNING, "Error in provisioning");
-                                    ex.printStackTrace();
-                                    throw Throwables.propagate(ex);
-                                }
-                                finally {
-                                    //decrementAmiSlaveProvision(t.ami);
-                                }
-                            }
-                        })
-                        ,t.getNumExecutors()));
-
-                excessWorkload -= t.getNumExecutors();
-
+            while (containersToCreate > 0) {
+            	boolean provisioned = provisionContainer(t, r);
+            	if (!provisioned) {
+            		break;
+            	}
+                containersToCreate -= t.getNumExecutors();
             }
             return r;
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             LOGGER.log(Level.WARNING,"Failed to provision Docker slave", e);
             return Collections.emptyList();
         }
+    }
+    
+    /**
+     * Provision a container slave.
+     * @param t
+     * @param r
+     * @return true if the slave could be provisioned, false if it could not and no other can be at this time.
+     */
+    private boolean provisionContainer(final DockerTemplate t, List<NodeProvisioner.PlannedNode> r)
+    throws Exception {
+        if (!addProvisionedSlave(t.image, t.instanceCap)) {
+            return false;
+        }
+
+        r.add(new NodeProvisioner.PlannedNode(t.getDisplayName(),
+                Computer.threadPoolForRemoting.submit(new Callable<Node>() {
+                    public Node call() throws Exception {
+                        // TODO: record the output somewhere
+                        try {
+                            DockerSlave s = t.provision(new StreamTaskListener(System.out, Charset.defaultCharset()));
+                            Jenkins.getInstance().addNode(s);
+                            // EC2 instances may have a long init script. If we declare
+                            // the provisioning complete by returning without the connect
+                            // operation, NodeProvisioner may decide that it still wants
+                            // one more instance, because it sees that (1) all the slaves
+                            // are offline (because it's still being launched) and
+                            // (2) there's no capacity provisioned yet.
+                            //
+                            // deferring the completion of provisioning until the launch
+                            // goes successful prevents this problem.
+                            s.toComputer().connect(false).get();
+                            return s;
+                        }
+                        catch(Exception ex) {
+                            LOGGER.log(Level.WARNING, "Error in provisioning");
+                            ex.printStackTrace();
+                            throw Throwables.propagate(ex);
+                        }
+                        finally {
+                            //decrementAmiSlaveProvision(t.ami);
+                        }
+                    }
+                })
+                , t.getNumExecutors()));
+        return true;
     }
 
     @Override
@@ -216,4 +214,35 @@ public class DockerCloud extends Cloud {
             return FormValidation.ok();
         }
     }
+
+	void containerTerminated(DockerTemplate template, DockerSlave dockerSlave, TaskListener listener) {
+		if (template.getMinIdleContainers() >= 0) {
+			// if we have a number of min idle containers, create them
+			Label label = Label.get(dockerSlave.getLabelString());
+			LoadStatistics stat = label.loadStatistics;
+			NodeProvisioner provisioner = label.nodeProvisioner;
+			synchronized (provisioner) {
+				try {
+					// There may be a rounding error here. Jenkins is doing some odd stuff.
+					int excessWorkload = (int) Math.min(stat.queueLength.getLatest(TimeScale.SEC10), stat.computeQueueLength());
+					excessWorkload -= label.getIdleExecutors();
+					// This turned into a total hack.
+					Field pendingLaunchesField = provisioner.getClass().getDeclaredField("pendingLaunches");
+					pendingLaunchesField.setAccessible(true);
+					List<PlannedNode> plannedNodes = (List<PlannedNode>) pendingLaunchesField.get(provisioner);
+					for (PlannedNode plannedNode : plannedNodes) {
+						excessWorkload -= plannedNode.numExecutors;
+					}
+					if (excessWorkload > -template.getMinIdleContainers()) {
+		                plannedNodes.addAll(provision(label, excessWorkload));
+					}
+				}
+				catch (Exception e) {
+					LOGGER.log(Level.WARNING,
+							"Error in provisioning Docker container to maintain minimum idle count: " + e.toString());
+				}
+			}
+		}
+		
+	}
 }
