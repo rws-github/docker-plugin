@@ -224,6 +224,7 @@ public class DockerTemplate implements Describable<DockerTemplate> {
         dockerClient.startContainer(container.getId(), hostConfig);
 
         String containerId = container.getId();
+        String nodeName = this.image + "-" + containerId.substring(0, 12);
 
         ContainerInspectResponse containerInspectResponse = dockerClient.inspectContainer(containerId);
 
@@ -231,7 +232,7 @@ public class DockerTemplate implements Describable<DockerTemplate> {
         ComputerLauncher launcher = new DockerComputerLauncher(this, containerInspectResponse);
 
         return new DockerSlave(this, containerId,
-                containerId.substring(0, 12),
+        		nodeName,
                 nodeDescription,
                 remoteFs, numExecutors, mode, labelString,
                 launcher, retentionStrategy, nodeProperties);
