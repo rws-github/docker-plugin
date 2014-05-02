@@ -16,7 +16,6 @@ import hudson.FilePath;
 import hudson.Launcher;
 import hudson.Util;
 import hudson.model.*;
-import hudson.model.Computer;
 import hudson.model.Node.Mode;
 import hudson.model.labels.LabelAtom;
 import hudson.plugins.sshslaves.SSHLauncher;
@@ -43,6 +42,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.net.URL;
 import java.util.*;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -204,33 +204,41 @@ public class DockerTemplate implements Describable<DockerTemplate> {
         containerConfig.setPortSpecs(new String[]{"22"});
 
         ContainerCreateResponse container = dockerClient.createContainer(containerConfig);
-
-        // Launch it.. :
-        // MAybe should be in computerLauncher
-
-        Map<String, PortBinding[]> bports = new HashMap<String, PortBinding[]>();
-        PortBinding binding = new PortBinding();
-        binding.hostIp = "0.0.0.0";
-        // in case you are running Docker in something like Vagrant and have port 22 mapped to something else...
-        if (!StringUtils.isBlank(sshPort)) {
-        	binding.hostPort = sshPort;
-        }
-        bports.put("22/tcp", new PortBinding[] { binding });
-
-        HostConfig hostConfig = new HostConfig();
-        hostConfig.setPortBindings(bports);
-
-
-        dockerClient.startContainer(container.getId(), hostConfig);
-
         String containerId = container.getId();
-        String nodeName = this.image + "-" + containerId.substring(0, 12);
+
+        // Launch it..
+        try {
+	        Map<String, PortBinding[]> bports = new HashMap<String, PortBinding[]>();
+	        PortBinding binding = new PortBinding();
+	        binding.hostIp = "0.0.0.0";
+	        // in case you are running Docker in something like Vagrant and have port 22 mapped to something else...
+	        if (!StringUtils.isBlank(sshPort)) {
+	        	binding.hostPort = sshPort;
+	        }
+	        bports.put("22/tcp", new PortBinding[] { binding });
+	
+	        HostConfig hostConfig = new HostConfig();
+	        hostConfig.setPortBindings(bports);
+
+        	dockerClient.startContainer(containerId, hostConfig);
+        }
+        catch (Exception e) {
+            try {
+            	dockerClient.removeContainer(containerId);
+            }
+            catch (DockerException e2) {
+                LOGGER.log(Level.SEVERE, "Failure to remove container " + containerId + " that did not start.", e2);
+            }
+            finally {
+            	throw e;
+            }
+        }
 
         ContainerInspectResponse containerInspectResponse = dockerClient.inspectContainer(containerId);
 
-
         ComputerLauncher launcher = new DockerComputerLauncher(this, containerInspectResponse);
 
+        String nodeName = this.image + "-" + containerId.substring(0, 12);
         return new DockerSlave(this, containerId,
         		nodeName,
                 nodeDescription,
