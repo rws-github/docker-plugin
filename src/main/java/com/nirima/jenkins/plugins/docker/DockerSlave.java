@@ -16,15 +16,17 @@ import hudson.slaves.ComputerLauncher;
 import hudson.slaves.RetentionStrategy;
 import hudson.triggers.SafeTimerTask;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import jenkins.model.Jenkins;
 import jenkins.util.Timer;
 
 import org.acegisecurity.Authentication;
+import org.apache.commons.io.FileUtils;
 
 import com.google.common.base.Objects;
 import com.kpelykh.docker.client.DockerClient;
@@ -129,7 +131,16 @@ public class DockerSlave extends AbstractCloudSlave {
             LOGGER.log(Level.SEVERE, "Failure to disconnect, stop or remove Docker container " + containerId, e);
         }
         finally {
-        	dockerTemplate.containerTerminated(this, listener);
+        	try {
+	        	// delete log directory/files
+	        	File slaveLogDir = new File(Jenkins.getInstance().getRootDir(), "logs/slaves/" + getDisplayName());
+	        	if (slaveLogDir.exists()) {
+	        		FileUtils.deleteDirectory(slaveLogDir);
+	        	}
+        	}
+        	finally {
+        		dockerTemplate.containerTerminated(this, listener);
+        	}
         }
     }
 
