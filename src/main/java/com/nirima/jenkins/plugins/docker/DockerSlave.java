@@ -100,20 +100,33 @@ public class DockerSlave extends AbstractCloudSlave {
         DockerClient client = getClient();
 
         try {
+        	LOGGER.log(Level.INFO, "Disconnecting slave " + super.getDisplayName());
             toComputer().disconnect(null);
-            client.stopContainer(containerId);
+            try {
+            	client.stopContainer(containerId);
 
-            if( theRun != null ) {
+                if (theRun != null) {
+                    try {
+                        commit();
+                    }
+                    catch (DockerException e) {
+                        LOGGER.log(Level.SEVERE, "Failure to commit Docker container " + containerId, e);
+                    }
+                }
+                
                 try {
-                    commit();
-                } catch (DockerException e) {
-                    LOGGER.log(Level.SEVERE, "Failure to commit instance " + containerId);
+                	client.removeContainer(containerId);
+                }
+                catch (DockerException e) {
+                    LOGGER.log(Level.SEVERE, "Failure to remove container " + containerId, e);
                 }
             }
-
-            client.removeContainer(containerId);
-        } catch (DockerException e) {
-            LOGGER.log(Level.SEVERE, "Failure to terminate instance " + containerId);
+            catch (DockerException e) {
+                LOGGER.log(Level.SEVERE, "Failure to stop container " + containerId, e);
+            }
+        }
+        catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Failure to disconnect, stop or remove Docker container " + containerId, e);
         }
         finally {
         	dockerTemplate.containerTerminated(this, listener);
