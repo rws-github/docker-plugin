@@ -181,7 +181,7 @@ public class DockerCloud extends Cloud {
      * Check not too many already running.
      *
      */
-    private boolean addProvisionedSlave(String image, int instanceCap) throws Exception {
+    private boolean addProvisionedSlave(final String image, int instanceCap) throws Exception {
         if( instanceCap == 0 )
             return true;
 
@@ -189,8 +189,7 @@ public class DockerCloud extends Cloud {
 
         Collection<Container> matching = Collections2.filter(containers, new Predicate<Container>() {
             public boolean apply(@Nullable Container container) {
-                // TODO: filter out containers not of the right type.
-                return true;
+                return image.equalsIgnoreCase(container.getImage());
             }
         });
 
