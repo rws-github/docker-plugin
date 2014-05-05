@@ -207,6 +207,7 @@ public class DockerTemplate implements Describable<DockerTemplate> {
         String containerId = container.getId();
 
         // Launch it..
+        boolean removeContainer = true;
         try {
 	        Map<String, PortBinding[]> bports = new HashMap<String, PortBinding[]>();
 	        PortBinding binding = new PortBinding();
@@ -221,17 +222,17 @@ public class DockerTemplate implements Describable<DockerTemplate> {
 	        hostConfig.setPortBindings(bports);
 
         	dockerClient.startContainer(containerId, hostConfig);
+        	removeContainer = false;
         }
-        catch (Exception e) {
-            try {
-            	dockerClient.removeContainer(containerId);
-            }
-            catch (DockerException e2) {
-                LOGGER.log(Level.SEVERE, "Failure to remove container " + containerId + " that did not start.", e2);
-            }
-            finally {
-            	throw e;
-            }
+        finally {
+        	if (removeContainer) {
+	            try {
+	            	dockerClient.removeContainer(containerId);
+	            }
+	            catch (DockerException e) {
+	                LOGGER.log(Level.SEVERE, "Failure to remove container " + containerId + " that did not start.", e);
+	            }
+        	}
         }
 
         ContainerInspectResponse containerInspectResponse = dockerClient.inspectContainer(containerId);
