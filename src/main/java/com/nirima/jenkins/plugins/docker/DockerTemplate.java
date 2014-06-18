@@ -1,49 +1,51 @@
 package com.nirima.jenkins.plugins.docker;
 
-import com.cloudbees.jenkins.plugins.sshcredentials.SSHAuthenticator;
-import com.cloudbees.jenkins.plugins.sshcredentials.SSHUserListBoxModel;
-import com.cloudbees.plugins.credentials.CredentialsProvider;
-import com.cloudbees.plugins.credentials.common.StandardUsernameCredentials;
-import com.cloudbees.plugins.credentials.domains.HostnamePortRequirement;
-import com.google.common.base.Strings;
-import com.kpelykh.docker.client.DockerClient;
-import com.kpelykh.docker.client.DockerException;
-import com.kpelykh.docker.client.model.*;
-import com.trilead.ssh2.Connection;
-
 import hudson.Extension;
-import hudson.FilePath;
-import hudson.Launcher;
 import hudson.Util;
-import hudson.model.*;
-import hudson.model.Node.Mode;
+import hudson.model.Describable;
+import hudson.model.ItemGroup;
+import hudson.model.TaskListener;
+import hudson.model.Descriptor;
+import hudson.model.Label;
+import hudson.model.Node;
 import hudson.model.labels.LabelAtom;
 import hudson.plugins.sshslaves.SSHLauncher;
-import hudson.remoting.Callable;
-import hudson.remoting.Channel;
 import hudson.security.ACL;
-import hudson.slaves.ComputerLauncher;
 import hudson.slaves.NodeProperty;
 import hudson.slaves.NodePropertyDescriptor;
-import hudson.slaves.NodeDescriptor;
+import hudson.slaves.ComputerLauncher;
 import hudson.slaves.RetentionStrategy;
-import hudson.util.ClockDifference;
 import hudson.util.DescribableList;
-import hudson.util.ListBoxModel;
 import hudson.util.StreamTaskListener;
+import hudson.util.ListBoxModel;
+
+import java.io.IOException;
+import java.io.PrintStream;
+import java.util.List;
+import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 import jenkins.model.Jenkins;
 
 import org.apache.commons.lang.StringUtils;
 import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
-import org.kohsuke.stapler.QueryParameter;
 
-import java.io.IOException;
-import java.io.PrintStream;
-import java.net.URL;
-import java.util.*;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import com.cloudbees.jenkins.plugins.sshcredentials.SSHAuthenticator;
+import com.cloudbees.jenkins.plugins.sshcredentials.SSHUserListBoxModel;
+import com.cloudbees.plugins.credentials.CredentialsProvider;
+import com.cloudbees.plugins.credentials.common.StandardUsernameCredentials;
+import com.google.common.base.Strings;
+import com.github.dockerjava.client.DockerClient;
+import com.github.dockerjava.client.DockerException;
+import com.github.dockerjava.client.model.ContainerConfig;
+import com.github.dockerjava.client.model.ContainerCreateResponse;
+import com.github.dockerjava.client.model.ContainerInspectResponse;
+import com.github.dockerjava.client.model.HostConfig;
+import com.github.dockerjava.client.model.Ports;
+import com.github.dockerjava.client.model.Ports.Port;
+import com.trilead.ssh2.Connection;
 
 /**
  * This is not a Node. It only extends Node for Node-scoped tools.
@@ -198,36 +200,28 @@ public class DockerTemplate implements Describable<DockerTemplate> {
 
         RetentionStrategy retentionStrategy = new DockerRetentionStrategy();//RetentionStrategy.INSTANCE;
 
-        ContainerConfig containerConfig = new ContainerConfig();
-        containerConfig.setImage(image);
-        containerConfig.setCmd(new String[]{"/usr/sbin/sshd", "-D"});
-        containerConfig.setPortSpecs(new String[]{"22"});
-
-        ContainerCreateResponse container = dockerClient.createContainer(containerConfig);
+        ContainerCreateResponse container = dockerClient.createContainerCmd(image)
+        		.withCmd("/usr/sbin/sshd", "-D")
+        		.withExposedPorts("22")
+        		.exec();
         String containerId = container.getId();
 
         // Launch it..
         boolean removeContainer = true;
         try {
-	        Map<String, PortBinding[]> bports = new HashMap<String, PortBinding[]>();
-	        PortBinding binding = new PortBinding();
-	        binding.hostIp = "0.0.0.0";
-	        // in case you are running Docker in something like Vagrant and have port 22 mapped to something else...
-	        if (!StringUtils.isBlank(sshPort)) {
-	        	binding.hostPort = sshPort;
-	        }
-	        bports.put("22/tcp", new PortBinding[] { binding });
-	
-	        HostConfig hostConfig = new HostConfig();
-	        hostConfig.setPortBindings(bports);
+	        Ports bports = new Ports();
+	        Port port = new Port("tcp", "22", "0.0.0.0", sshPort);
+	        bports.addPort(port);
 
-        	dockerClient.startContainer(containerId, hostConfig);
+        	dockerClient.startContainerCmd(containerId)
+        		.withPortBindings(bports)
+        		.exec();
         	removeContainer = false;
         }
         finally {
         	if (removeContainer) {
 	            try {
-	            	dockerClient.removeContainer(containerId);
+	            	dockerClient.removeContainerCmd(containerId).exec();
 	            }
 	            catch (DockerException e) {
 	                LOGGER.log(Level.SEVERE, "Failure to remove container " + containerId + " that did not start.", e);
@@ -235,7 +229,7 @@ public class DockerTemplate implements Describable<DockerTemplate> {
         	}
         }
 
-        ContainerInspectResponse containerInspectResponse = dockerClient.inspectContainer(containerId);
+        ContainerInspectResponse containerInspectResponse = dockerClient.inspectContainerCmd(containerId).exec();
 
         ComputerLauncher launcher = new DockerComputerLauncher(this, containerInspectResponse);
 

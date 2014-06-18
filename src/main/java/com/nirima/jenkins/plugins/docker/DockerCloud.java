@@ -3,9 +3,9 @@ package com.nirima.jenkins.plugins.docker;
 import com.google.common.base.Predicate;
 import com.google.common.base.Throwables;
 import com.google.common.collect.Collections2;
-import com.kpelykh.docker.client.DockerClient;
-import com.kpelykh.docker.client.DockerException;
-import com.kpelykh.docker.client.model.Container;
+import com.github.dockerjava.client.DockerClient;
+import com.github.dockerjava.client.DockerException;
+import com.github.dockerjava.client.model.Container;
 
 import hudson.Extension;
 import hudson.model.*;
@@ -72,9 +72,13 @@ public class DockerCloud extends Cloud {
      * Connects to Docker.
      */
     public synchronized DockerClient connect() {
-
         if (connection == null) {
-            connection = new DockerClient(serverUrl);
+            try {
+				connection = new DockerClient(serverUrl);
+			}
+            catch (DockerException e) {
+            	LOGGER.log(Level.SEVERE, "Docker client creation failed " + e, e);
+			}
         }
         return connection;
 
@@ -185,7 +189,7 @@ public class DockerCloud extends Cloud {
         if( instanceCap == 0 )
             return true;
 
-        List<Container> containers = connect().listContainers(false);
+        List<Container> containers = connect().listContainersCmd().withShowAll(false).exec();
 
         Collection<Container> matching = Collections2.filter(containers, new Predicate<Container>() {
             public boolean apply(@Nullable Container container) {
@@ -208,7 +212,7 @@ public class DockerCloud extends Cloud {
                 ) throws IOException, ServletException, DockerException {
 
             DockerClient dc = new DockerClient(serverUrl.toString());
-            dc.info();
+            dc.infoCmd().exec();
 
             return FormValidation.ok();
         }

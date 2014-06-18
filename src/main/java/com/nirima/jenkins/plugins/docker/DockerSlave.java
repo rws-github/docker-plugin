@@ -29,9 +29,9 @@ import org.acegisecurity.Authentication;
 import org.apache.commons.io.FileUtils;
 
 import com.google.common.base.Objects;
-import com.kpelykh.docker.client.DockerClient;
-import com.kpelykh.docker.client.DockerException;
-import com.kpelykh.docker.client.model.CommitConfig;
+import com.github.dockerjava.client.DockerClient;
+import com.github.dockerjava.client.DockerException;
+import com.github.dockerjava.client.model.CommitConfig;
 import com.nirima.jenkins.plugins.docker.action.DockerBuildAction;
 
 
@@ -105,7 +105,7 @@ public class DockerSlave extends AbstractCloudSlave {
         	LOGGER.log(Level.INFO, "Disconnecting slave " + super.getDisplayName());
             toComputer().disconnect(null);
             try {
-            	client.stopContainer(containerId);
+            	client.stopContainerCmd(containerId).exec();
 
                 if (theRun != null) {
                     try {
@@ -117,7 +117,7 @@ public class DockerSlave extends AbstractCloudSlave {
                 }
                 
                 try {
-                	client.removeContainer(containerId);
+                	client.removeContainerCmd(containerId).exec();
                 }
                 catch (DockerException e) {
                     LOGGER.log(Level.SEVERE, "Failure to remove container " + containerId, e);
@@ -147,13 +147,16 @@ public class DockerSlave extends AbstractCloudSlave {
     public void commit() throws DockerException, IOException {
         DockerClient client = getClient();
 
-        CommitConfig commitConfig = new CommitConfig.Builder(containerId)
-                .author("Jenkins")
-                .repo(theRun.getParent().getDisplayName())
-                .tag(theRun.getDisplayName())
-                .build();
+        CommitConfig commitConfig = new CommitConfig(containerId)
+                .setAuthor("Jenkins")
+                .setRepo(theRun.getParent().getDisplayName())
+                .setTag(theRun.getDisplayName());
 
-        String tag_image = client.commit(commitConfig);
+        String tag_image = client.commitCmd(containerId)
+        	.withAuthor("Jenkins")
+            .withRepo(theRun.getParent().getDisplayName())
+            .withTag(theRun.getDisplayName())
+            .exec();
 
         theRun.addAction( new DockerBuildAction(getCloud().serverUrl, containerId, tag_image) );
         theRun.save();
