@@ -147,14 +147,9 @@ public class DockerSlave extends AbstractCloudSlave {
     public void commit() throws DockerException, IOException {
         DockerClient client = getClient();
 
-        CommitConfig commitConfig = new CommitConfig(containerId)
-                .setAuthor("Jenkins")
-                .setRepo(theRun.getParent().getDisplayName())
-                .setTag(theRun.getDisplayName());
-
         String tag_image = client.commitCmd(containerId)
         	.withAuthor("Jenkins")
-            .withRepo(theRun.getParent().getDisplayName())
+            .withRepository(theRun.getParent().getDisplayName())
             .withTag(theRun.getDisplayName())
             .exec();
 

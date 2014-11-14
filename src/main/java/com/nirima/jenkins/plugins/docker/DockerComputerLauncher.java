@@ -12,14 +12,16 @@ import hudson.slaves.SlaveComputer;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.Collection;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import jenkins.model.Jenkins;
 
 import com.github.dockerjava.client.model.ContainerInspectResponse;
-import com.github.dockerjava.client.model.Ports.Port;
+import com.github.dockerjava.client.model.ExposedPort;
+import com.github.dockerjava.client.model.Ports.Binding;
 
 
 /**
@@ -78,10 +80,10 @@ public class DockerComputerLauncher extends ComputerLauncher {
          * networkSettings=NetworkSettings{ipAddress='172.17.0.58', ipPrefixLen=16, gateway='172.17.42.1', bridge='docker0', ports={22/tcp=[Lcom.github.dockerjava.client.model.PortBinding;@2392d604}}, sysInitPath='null', resolvConfPath='/etc/resolv.conf', volumes={}, volumesRW={}, hostnamePath='/var/lib/docker/containers/970d68eb7410bca37ccc8ac193ae68a324f7d286012c1994dcf58a28daa76da2/hostname', hostsPath='/var/lib/docker/containers/970d68eb7410bca37ccc8ac193ae68a324f7d286012c1994dcf58a28daa76da2/hosts', name='/prickly_turing', driver='aufs'}
          */
     	int hostPort = -1;
-    	Collection<Port> ports = detail.getNetworkSettings().getPorts().getAllPorts();
-    	for (Port port : ports) {
-    		if ("22".equals(port.getPort())) {
-    			hostPort = Integer.valueOf(port.getHostPort());
+    	Map<ExposedPort, Binding> portBindingMap = detail.getNetworkSettings().getPorts().getBindings();
+    	for (Entry<ExposedPort, Binding> portBinding : portBindingMap.entrySet()) {
+    		if (22 == portBinding.getKey().getPort()) {
+    			hostPort = Integer.valueOf(portBinding.getValue().getHostPort());
     			break;
     		}
     	}

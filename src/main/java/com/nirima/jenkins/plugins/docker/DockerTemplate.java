@@ -42,9 +42,10 @@ import com.github.dockerjava.client.DockerException;
 import com.github.dockerjava.client.model.ContainerConfig;
 import com.github.dockerjava.client.model.ContainerCreateResponse;
 import com.github.dockerjava.client.model.ContainerInspectResponse;
+import com.github.dockerjava.client.model.ExposedPort;
 import com.github.dockerjava.client.model.HostConfig;
 import com.github.dockerjava.client.model.Ports;
-import com.github.dockerjava.client.model.Ports.Port;
+import com.github.dockerjava.client.model.Ports.Binding;
 import com.trilead.ssh2.Connection;
 
 /**
@@ -93,7 +94,7 @@ public class DockerTemplate implements Describable<DockerTemplate> {
 
     public final boolean tagOnCompletion;
 
-    public final String sshPort;
+    public final int sshPort;
     
     private /*almost final*/ DescribableList<NodeProperty<?>,NodePropertyDescriptor> nodeProperties = new DescribableList<NodeProperty<?>,NodePropertyDescriptor>(Jenkins.getInstance());
 
@@ -105,7 +106,7 @@ public class DockerTemplate implements Describable<DockerTemplate> {
                           String remoteFs,
                           String credentialsId, String jvmOptions, String javaPath,
                           String prefixStartSlaveCmd, String suffixStartSlaveCmd,
-                          boolean tagOnCompletion, String instanceCapStr, String sshPort,
+                          boolean tagOnCompletion, String instanceCapStr, int sshPort,
                           List<? extends NodeProperty<?>> nodeProperties, String minIdleContainersStr)
     throws IOException {
         this.image = image;
@@ -134,9 +135,6 @@ public class DockerTemplate implements Describable<DockerTemplate> {
         	throw new RuntimeException("Minimum number of idle containers must be less than or equals to the container cap.");
         }
 
-        if (!Strings.isNullOrEmpty(sshPort)) {
-            Integer.parseInt(sshPort); // validate the input
-        }
         this.sshPort = sshPort;
         
         this.nodeProperties.replaceBy(nodeProperties);
@@ -202,7 +200,7 @@ public class DockerTemplate implements Describable<DockerTemplate> {
 
         ContainerCreateResponse container = dockerClient.createContainerCmd(image)
         		.withCmd("/usr/sbin/sshd", "-D")
-        		.withExposedPorts("22")
+        		.withExposedPorts(ExposedPort.tcp(22))
         		.exec();
         String containerId = container.getId();
 
@@ -210,8 +208,7 @@ public class DockerTemplate implements Describable<DockerTemplate> {
         boolean removeContainer = true;
         try {
 	        Ports bports = new Ports();
-	        Port port = new Port("tcp", "22", "0.0.0.0", sshPort);
-	        bports.addPort(port);
+	        bports.bind(ExposedPort.tcp(22), new Binding("0.0.0.0", sshPort));
 
         	dockerClient.startContainerCmd(containerId)
         		.withPortBindings(bports)
@@ -246,7 +243,7 @@ public class DockerTemplate implements Describable<DockerTemplate> {
         return 1;
     }
 
-    public String getSshPort() {
+    public int getSshPort() {
     	return sshPort;
     }
 
